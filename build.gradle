@@ -1,0 +1,124 @@
+buildscript {
+    ext {
+
+    }
+    repositories {
+        mavenCentral()
+    }
+    dependencies {
+        classpath "io.codearte.gradle.nexus:gradle-nexus-staging-plugin:0.21.0"
+    }
+}
+
+plugins {
+    id 'nu.studer.credentials' version '1.0.7'
+}
+
+apply plugin: "java"
+apply plugin: "maven"
+apply plugin: 'signing'
+apply plugin: 'io.codearte.nexus-staging'
+defaultTasks "clean", "build"
+
+repositories {
+    mavenCentral()
+    jcenter()
+}
+
+sourceCompatibility = 1.9
+
+dependencies {
+    compile fileTree(include: ['*.jar'], dir: 'lib')
+}
+
+jar {
+    enabled = true
+    from {configurations.compile.filter {it.getName().startsWith("libAionApi-")}
+            .collect {it.isDirectory() ? it : zipTree(it)}}
+
+}
+
+// Create a jar with javadoc
+task javadocJar(type: Jar) {
+    classifier = 'javadoc'
+    from javadoc
+}
+
+// Create a jar with soruces
+task sourcesJar(type: Jar) {
+    classifier = 'sources'
+    from sourceSets.main.allSource
+}
+
+// hook all the artifacts under artifacts task
+artifacts {
+    archives javadocJar, sourcesJar
+}
+
+ext.isReleaseVersion = !version.endsWith("SNAPSHOT")
+
+
+// Signing task
+if (isReleaseVersion) {
+    signing {
+        required { isReleaseVersion && gradle.taskGraph.hasTask("uploadArchives") }
+        sign configurations.archives
+    }
+}
+
+uploadArchives {
+
+    repositories {
+        mavenDeployer {
+            beforeDeployment { MavenDeployment deployment -> signing.signPom(deployment) }
+
+            String ossPassword = credentials.ossrhPassword
+
+            repository(url: "https://oss.sonatype.org/service/local/staging/deploy/maven2/") {
+                authentication(userName: ossrhUsername, password: ossPassword)
+            }
+
+            snapshotRepository(url: "https://oss.sonatype.org/content/repositories/snapshots/") {
+                authentication(userName: ossrhUsername, password: ossPassword)
+            }
+
+            pom.project {
+
+                name 'blox4j-aion-api'
+                packaging 'jar'
+                // optionally artifactId can be defined here
+                description 'Wrapper Jar for Aion Java api'
+                url 'https://github.com/bloxbean/blox4j-aion-api'
+
+                scm {
+                    connection 'scm:git:git@github.com:bloxbean/blox4j-aion-api.git'
+                    developerConnection 'scm:git:git@github.com:bloxbean/blox4j-aion-api.git'
+                    url 'https://github.com/bloxbean/blox4j-aion-api'
+                }
+
+                licenses {
+                    license {
+                        name 'MIT License'
+                        url 'http://www.opensource.org/licenses/mit-license.php'
+                    }
+                }
+
+                developers {
+                    developer {
+                        id 'satran004'
+                        name 'Satya'
+                        email 'satran004@gmail.com'
+                    }
+                }
+            }
+        }
+    }
+}
+
+nexusStaging {
+    //packageGroup = "org.mycompany.myproject" //optional if packageGroup == project.getGroup()
+    //stagingProfileId = "yourStagingProfileId" //when not defined will be got from server using "packageGroup"
+    String ossPassword = credentials.ossrhPassword
+    username = ossrhUsername
+    password = ossPassword
+}
